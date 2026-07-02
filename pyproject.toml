@@ -57,6 +57,9 @@ packages = ["core"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# Put the repo root on sys.path so `import core` / `import scripts` work under a
+# bare `pytest` invocation (CI), not only `python -m pytest`.
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py311"
