@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import itertools
 import json
 import os
 import sqlite3
@@ -156,7 +157,13 @@ CREATE VIRTUAL TABLE IF NOT EXISTS fts_event USING fts5(
 class Store:
     """Lock-serialized wrapper around a single shared SQLite connection."""
 
+    _seq = itertools.count(1)
+
     def __init__(self, db_path: Optional[str] = None):
+        # Process-unique, monotonic id for read-cache keys. NOT id(self): a GC'd
+        # Store's address can be reused, which would let a new Store read a stale
+        # cache entry. A counter is never reused.
+        self.uid = next(Store._seq)
         self.db_path = os.path.abspath(db_path or _DEFAULT_DB)
         os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
         self._lock = threading.RLock()
@@ -210,7 +217,13 @@ class Store:
 
     def project_version(self, project: str) -> int:
         """Generation counter for a project, bumped on any mutation. Read caches
-        rebuild only when this changes."""
+        rebuild only when this changes.
+
+        In-memory + per-Store: assumes the single-process, single-worker model
+        this tool runs in (loopback, single user). Under uvicorn ``--workers>1``
+        a mutation in one worker would not invalidate another's cache — that
+        deployment would need a DB-persisted version token instead.
+        """
         return self._gen.get(project, 0)
 
     def _bump(self, project: Optional[str]) -> None:

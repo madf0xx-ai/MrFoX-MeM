@@ -111,7 +111,7 @@ _VEC_CACHE: dict[tuple[int, str], tuple[int, list]] = {}
 
 
 def _embedding_rows(store: Store, project: str) -> list:
-    key = (id(store), project)
+    key = (store.uid, project)
     gen = store.project_version(project)
     ent = _VEC_CACHE.get(key)
     if ent is not None and ent[0] == gen:
@@ -121,7 +121,7 @@ def _embedding_rows(store: Store, project: str) -> list:
     if len(_VEC_CACHE) > _CACHE_MAX_PROJECTS:
         for k in list(_VEC_CACHE):
             if k != key:
-                del _VEC_CACHE[k]
+                _VEC_CACHE.pop(k, None)  # pop-not-del: two threads evicting can't KeyError
                 break
     return rows
 
@@ -321,10 +321,14 @@ def _rel_path(path: str, root: str) -> str:
         return "?"
     try:
         if root:
-            return os.path.relpath(path, root)
-    except (ValueError, TypeError):
+            rel = os.path.relpath(path, root)
+            if not rel.startswith(".."):        # inside root → safe repo-relative
+                return rel
+    except (ValueError, TypeError):             # cross-drive (Windows), bad types
         pass
-    return os.path.basename(path) or path
+    # Out-of-root / trailing-sep / cross-drive: basename only — never leak an
+    # absolute path or parent structure.
+    return os.path.basename(path.rstrip("/\\")) or "?"
 
 
 def _node_line(n) -> Optional[int]:
@@ -395,6 +399,9 @@ def relevant(
             ordered_hits.append((h, [n["id"] for n in chain]))
 
     node_dicts = [_node_to_dict(n) for n in seen_nodes.values()]
+    for nd in node_dicts:  # relativize the JSON too — no absolute paths escape /relevant
+        if nd.get("path"):
+            nd["path"] = _rel_path(nd["path"], root)
     hit_ids = [h["node_id"] for h in hits]
     # Episodic memory blends TWO ways: events explicitly ref-tagged to a hit node
     # (targeted), AND events matched by MEANING via full-text search on the prompt

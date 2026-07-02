@@ -5,22 +5,22 @@
   "reranker_backend": "fastembed",
   "levels": {
     "base (vec+FTS+RRF)": {
-      "hit_at_k": 0.875,
-      "mrr": 0.7916666666666666,
-      "recall_at_k": 0.8541666666666666,
-      "latency_ms": 22.28221297264099
+      "hit_at_k": 0.9375,
+      "mrr": 0.7552083333333334,
+      "recall_at_k": 0.8854166666666666,
+      "latency_ms": 18.563389778137207
     },
     "+graph (PageRank)": {
-      "hit_at_k": 1.0,
-      "mrr": 0.8098958333333334,
-      "recall_at_k": 0.9791666666666666,
-      "latency_ms": 25.190889835357666
+      "hit_at_k": 0.9375,
+      "mrr": 0.7864583333333334,
+      "recall_at_k": 0.8854166666666666,
+      "latency_ms": 17.84355938434601
     },
     "+rerank (cross-enc)": {
-      "hit_at_k": 1.0,
-      "mrr": 0.7953869047619048,
-      "recall_at_k": 1.0,
-      "latency_ms": 653.9218425750732
+      "hit_at_k": 0.9375,
+      "mrr": 0.7864583333333334,
+      "recall_at_k": 0.9375,
+      "latency_ms": 611.5818917751312
     }
   }
 }

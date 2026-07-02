@@ -1,6 +1,8 @@
 """Retrieval tests: token math, prompt-injection fencing, budget bound."""
 from __future__ import annotations
 
+import os
+
 import pytest
 
 from core import ingest as I
@@ -123,6 +125,45 @@ def test_vector_cache_invalidates_on_reingest(tmp_path):
 
     res = T.hybrid_search(s, "demo", "beta", k=8)
     assert any("beta" in r["label"] for r in res)           # new node visible, not stale cache
+    s.close()
+
+
+def test_vector_cache_not_stale_across_ingest_phases(tmp_path):
+    # Two-phase-ingest race: a query between node-insert (phase 1) and embedding-
+    # write (phase 2) caches an EMPTY vector set. Phase 2 must bump the version so
+    # that cache invalidates — else vectors stay invisible forever.
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "alpha.py").write_text('def alpha():\n    "alpha A"\n    return 1\n')
+    s = Store(str(tmp_path / "t.db"))
+    T._VEC_CACHE.clear()
+    with s.bulk():
+        result, embed_batch, embedder = I._ingest_impl(s, str(proj), project="demo")
+    assert T._embedding_rows(s, "demo") == []            # phase 1 only: no vectors yet
+    I._flush_embeddings(s, embedder, embed_batch, result)  # phase 2: writes vectors + bumps
+    res = T.hybrid_search(s, "demo", "alpha", k=8)
+    assert res, "vectors must be visible after flush (empty cache was invalidated)"
+    s.close()
+
+
+def test_rel_path_never_leaks_absolute():
+    root = os.path.join(os.sep, "repo", "proj")
+    assert T._rel_path(os.path.join(root, "core", "a.py"), root) == os.path.join("core", "a.py")
+    assert T._rel_path(os.path.join(os.sep, "etc", "passwd"), root) == "passwd"  # out-of-root
+    assert not T._rel_path(root + os.sep, root).startswith(os.sep)               # trailing sep
+    assert T._rel_path(os.path.join(os.sep, "x", "z.py"), "") == "z.py"          # empty root
+
+
+def test_relevant_nodes_have_relative_paths(tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "alpha.py").write_text('def alpha():\n    "alpha A"\n    return 1\n')
+    s = Store(str(tmp_path / "t.db"))
+    I.ingest(s, str(proj), project="demo")
+    out = T.relevant(s, "demo", "alpha", budget_tokens=600)
+    for n in out["nodes"]:
+        if n["path"]:
+            assert not os.path.isabs(n["path"])          # no absolute path escapes /relevant
     s.close()
 
 

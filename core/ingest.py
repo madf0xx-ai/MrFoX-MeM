@@ -465,12 +465,16 @@ def ingest(
     project: Optional[str] = None,
     exclude: Optional[list[str]] = None,
 ) -> IngestResult:
-    """Ingest ``path`` into ``project`` as one atomic, single-commit transaction.
+    """Ingest ``path`` into ``project`` in two commits.
 
-    Wrapping the whole walk in ``store.bulk()`` collapses what was thousands of
-    per-row commits (blob + node + edge + embedding, per file and per symbol)
-    into a single commit — the dominant ingest speed win — and makes re-ingest
-    atomic: a failure part-way rolls back instead of leaving a half-built tree.
+    Phase 1 (this ``store.bulk()``) walks the tree and writes all nodes/edges in
+    ONE transaction — atomic, so a failure mid-walk rolls back rather than leaving
+    a half-built tree. Phase 2 (``_flush_embeddings``) computes embeddings OUTSIDE
+    the lock and persists them in a second bulk commit, then bumps the project
+    version. If phase 2 fails or the process dies between phases, the project has
+    nodes but no vectors — retrieval degrades to FTS+graph and the next ingest
+    (``clear_project`` + rebuild) self-heals. Not a single atomic unit, by design:
+    keeping slow ONNX inference out of the write lock is worth the trade.
     """
     # Phase 1: walk + insert nodes/edges under the write lock (fast SQLite).
     with store.bulk():
@@ -760,4 +764,9 @@ def _flush_embeddings(store: Store, embedder, embed_batch, result: "IngestResult
             store.put_cached_embedding(keys[i], dim, fresh[j])
         for (nid, _t), k in zip(embed_batch, keys):
             store.put_embedding(nid, dim, cache[k])
+    # Bump the version AFTER vectors land: put_embedding doesn't bump, and phase 1
+    # already advanced the gen writing nodes. Without this, a query landing between
+    # the two phases would cache an EMPTY vector set at the final gen and serve it
+    # stale forever (the gen never changes again). This invalidates that cache.
+    store._bump(result.project)
     result.reused = len(texts) - len(miss)

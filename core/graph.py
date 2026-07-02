@@ -114,8 +114,8 @@ _GRAPH_CACHE: dict[tuple[int, str], tuple[int, list, list]] = {}
 
 
 def _graph_data(store: Any, project: str) -> tuple[list, list]:
-    key = (id(store), project)
     gen = store.project_version(project) if hasattr(store, "project_version") else -1
+    key = (getattr(store, "uid", -1), project)
     ent = _GRAPH_CACHE.get(key)
     if ent is not None and ent[0] == gen and gen != -1:
         return ent[1], ent[2]
@@ -126,7 +126,7 @@ def _graph_data(store: Any, project: str) -> tuple[list, list]:
         if len(_GRAPH_CACHE) > _GRAPH_CACHE_MAX:
             for k in list(_GRAPH_CACHE):
                 if k != key:
-                    del _GRAPH_CACHE[k]
+                    _GRAPH_CACHE.pop(k, None)  # pop-not-del: eviction race can't KeyError
                     break
     return nodes, edges
 
