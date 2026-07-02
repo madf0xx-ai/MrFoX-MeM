@@ -1,0 +1,26 @@
+{
+  "k": 8,
+  "n_queries": 16,
+  "embed_backend": "fastembed",
+  "reranker_backend": "fastembed",
+  "levels": {
+    "base (vec+FTS+RRF)": {
+      "hit_at_k": 0.875,
+      "mrr": 0.7916666666666666,
+      "recall_at_k": 0.8541666666666666,
+      "latency_ms": 22.28221297264099
+    },
+    "+graph (PageRank)": {
+      "hit_at_k": 1.0,
+      "mrr": 0.8098958333333334,
+      "recall_at_k": 0.9791666666666666,
+      "latency_ms": 25.190889835357666
+    },
+    "+rerank (cross-enc)": {
+      "hit_at_k": 1.0,
+      "mrr": 0.7953869047619048,
+      "recall_at_k": 1.0,
+      "latency_ms": 653.9218425750732
+    }
+  }
+}

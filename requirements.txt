@@ -1,0 +1,12 @@
+fastapi>=0.110
+uvicorn>=0.29
+pydantic>=2.6
+
+# Recommended defaults — local, offline after the first model fetch, 0 API tokens:
+#   fastembed : real semantic embeddings (BAAI/bge-small-en-v1.5, 384d, ONNX/CPU)
+#               and the cross-encoder reranker.
+#   numpy     : vectorized retrieval scan (one batched matmul).
+# Delete these two lines for a pure-stdlib install — it still runs, falling back
+# to the built-in hashing embedder (keyword-level recall only; /health flags it).
+fastembed>=0.4
+numpy>=1.24

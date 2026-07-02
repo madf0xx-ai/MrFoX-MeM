@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MrFoX-MeM — Knowledge Tree</title>
+  <!-- Cytoscape.js via jsDelivr CDN (only external dependency), pinned + SRI-verified -->
+  <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.30.2/dist/cytoscape.min.js"
+          integrity="sha384-IWROdLKRsN1UuJywMlWl7/blXQ8GEooN2n7dzTxfEPd7ybYIKCUJ2Ol/1Gpf3YV4"
+          crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+  <link rel="stylesheet" href="/ui/style.css?v=3" />
+</head>
+<body>
+  <header id="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">&#129418;</span>
+      <span class="brand-name">MrFoX&#8209;MeM</span>
+      <span id="health-pill" class="pill pill-muted" title="API health">checking&hellip;</span>
+    </div>
+
+    <div class="controls">
+      <label class="ctl">
+        <span class="ctl-label">Project</span>
+        <select id="project-select" aria-label="Select project"></select>
+      </label>
+
+      <form id="search-form" class="ctl search-ctl" autocomplete="off">
+        <input id="search-input" type="search" placeholder="Search nodes&hellip;"
+               aria-label="Search knowledge tree" />
+        <button id="search-btn" type="submit">Search</button>
+        <button id="search-clear" type="button" title="Clear search">&times;</button>
+      </form>
+
+      <button id="reload-btn" type="button" title="Reload tree">&#8635;</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- Graph canvas -->
+    <section id="graph-wrap">
+      <div id="cy" role="application" aria-label="Knowledge graph"></div>
+
+      <!-- Legend -->
+      <div id="legend" aria-label="Node kind legend"></div>
+
+      <!-- Empty state overlay -->
+      <div id="empty-state" class="overlay hidden">
+        <div class="empty-card">
+          <h2>No knowledge tree yet</h2>
+          <p id="empty-msg">No project has been ingested.</p>
+          <p>Ingest a project to build its knowledge tree:</p>
+          <pre><code>make ingest PATH=/abs/path/to/your/project</code></pre>
+          <p class="muted">or POST to the core API:</p>
+          <pre><code>curl -X POST http://127.0.0.1:8077/ingest \
+  -H 'Content-Type: application/json' \
+  -d '{"path":"/abs/path/to/project","project":"myproj"}'</code></pre>
+          <button id="empty-reload" type="button">Reload</button>
+        </div>
+      </div>
+
+      <!-- Loading overlay -->
+      <div id="loading" class="overlay hidden"><div class="spinner"></div></div>
+    </section>
+
+    <!-- Right side panel -->
+    <aside id="side-panel">
+      <nav id="panel-tabs" role="tablist">
+        <button class="tab active" id="tab-details" role="tab" aria-selected="true"
+                data-tab="details">Details</button>
+        <button class="tab" id="tab-context" role="tab" aria-selected="false"
+                data-tab="context">Context</button>
+        <button class="tab" id="tab-sessions" role="tab" aria-selected="false"
+                data-tab="sessions">Sessions</button>
+      </nav>
+
+      <!-- Details tab -->
+      <div id="panel-details" class="panel-body" role="tabpanel">
+        <div id="details-empty" class="muted hint">Select a node to see its details.</div>
+        <div id="details-content" class="hidden">
+          <h3 id="d-label"></h3>
+          <div class="meta-row">
+            <span id="d-kind" class="pill"></span>
+          </div>
+          <dl class="kv">
+            <dt>Path</dt><dd id="d-path"></dd>
+          </dl>
+          <h4>Summary</h4>
+          <p id="d-summary" class="summary"></p>
+
+          <h4>Related</h4>
+          <ul id="d-related" class="related-list"></ul>
+          <div id="d-related-empty" class="muted hint hidden">No related items.</div>
+        </div>
+      </div>
+
+      <!-- Context tab -->
+      <div id="panel-context" class="panel-body hidden" role="tabpanel">
+        <div class="ctx-head">
+          <h3>Recent context</h3>
+          <button id="ctx-refresh" type="button" title="Refresh timeline">&#8635;</button>
+        </div>
+
+        <!-- Capture a note/decision/finding into this project's memory. -->
+        <form id="ctx-add" class="ctx-add" autocomplete="off">
+          <textarea id="ctx-input" rows="2"
+            placeholder="Jot a finding, decision, or note — saved to this project's memory and injected when relevant…"
+            aria-label="New context note"></textarea>
+          <div class="ctx-add-row">
+            <select id="ctx-kind" aria-label="Kind">
+              <option value="note">note</option>
+              <option value="decision">decision</option>
+              <option value="work">work</option>
+            </select>
+            <button id="ctx-save" type="submit">Save to memory</button>
+          </div>
+        </form>
+
+        <div id="ctx-empty" class="muted hint">No context events recorded yet.</div>
+        <ol id="ctx-timeline" class="timeline"></ol>
+      </div>
+
+      <!-- Sessions tab: live retrieval feed + runs (workflow) timeline -->
+      <div id="panel-sessions" class="panel-body hidden" role="tabpanel">
+        <div class="sx-head">
+          <h3>Sessions</h3>
+          <div class="sx-head-right">
+            <span id="sx-updated" class="sx-updated muted" title="Time since last successful poll"></span>
+            <button id="sx-live-toggle" type="button" class="sx-live" aria-pressed="true"
+                    title="Pause / resume live polling">&#9679; Live</button>
+          </div>
+        </div>
+
+        <!-- Live retrieval feed -->
+        <section class="sx-section">
+          <h4>Live feed</h4>
+          <div id="sx-feed-empty" class="muted hint">No sessions yet &mdash; context appears here when an agent starts a conversation.</div>
+          <ul id="sx-feed" class="sx-feed"></ul>
+        </section>
+
+        <!-- Injected events for the selected feed entry -->
+        <section id="sx-detail" class="sx-section hidden">
+          <h4>Injected this retrieval</h4>
+          <ol id="sx-detail-events" class="timeline"></ol>
+        </section>
+
+        <!-- Runs (workflow) -->
+        <section class="sx-section">
+          <h4>Runs</h4>
+          <div id="sx-runs-empty" class="muted hint">No runs yet.</div>
+          <ul id="sx-runs" class="sx-runs"></ul>
+        </section>
+
+        <!-- Selected run's ordered step timeline -->
+        <section id="sx-run-detail" class="sx-section hidden">
+          <div class="sx-run-detail-head">
+            <h4 id="sx-run-title">Run</h4>
+            <button id="sx-run-close" type="button" title="Close run">&times;</button>
+          </div>
+          <ol id="sx-run-steps" class="timeline"></ol>
+        </section>
+      </div>
+    </aside>
+  </main>
+
+  <script src="/ui/app.js?v=3"></script>
+</body>
+</html>

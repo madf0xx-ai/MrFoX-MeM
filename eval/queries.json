@@ -1,0 +1,21 @@
+{
+  "_comment": "Labeled retrieval-quality set for MrFoX-MeM's own repo. A retrieved node counts as relevant if any 'relevant' substring appears (case-insensitively) in its label or path. Used by scripts/eval.py to compute hit@k / recall@k / MRR and per-stage ablations. Keep queries phrased as a user/agent would ask, NOT as the target filename.",
+  "queries": [
+    { "q": "how does hybrid search combine vector similarity with keyword ranking", "relevant": ["hybrid_search", "tree.py"] },
+    { "q": "reciprocal rank fusion of the two result lists", "relevant": ["hybrid_search", "tree.py"] },
+    { "q": "personalized pagerank ranking over the code graph", "relevant": ["graph.py", "personalized_pagerank", "graph_scores"] },
+    { "q": "cross encoder reranker for the top candidates", "relevant": ["rerank.py", "get_reranker"] },
+    { "q": "where are secrets redacted so they are never stored", "relevant": ["ingest.py"] },
+    { "q": "assemble a token bounded context block within a budget", "relevant": ["tree.py", "relevant", "tokens.py"] },
+    { "q": "sqlite schema content addressed blob storage", "relevant": ["store.py"] },
+    { "q": "extract symbols from multiple languages with tree sitter", "relevant": ["treesit.py"] },
+    { "q": "which tools does the MCP server expose to the agent", "relevant": ["server.ts"] },
+    { "q": "session start hook injects project context into claude code", "relevant": ["session_start.py"] },
+    { "q": "local embeddings with a hashing fallback backend", "relevant": ["embed.py"] },
+    { "q": "fence injected memory as untrusted data against prompt injection", "relevant": ["tree.py", "wrap_untrusted"] },
+    { "q": "single atomic transaction for the whole ingest", "relevant": ["store.py", "bulk"] },
+    { "q": "benchmark how many tokens the slice saves versus whole files", "relevant": ["benchmark.py"] },
+    { "q": "count tokens with tiktoken and a chars per token fallback", "relevant": ["tokens.py"] },
+    { "q": "validate the ingest path and reject symlink escapes", "relevant": ["ingest.py", "validate_ingest_path"] }
+  ]
+}

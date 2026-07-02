@@ -1,0 +1,31 @@
+{
+  "_comment": "MrFoX-MeM hook wiring (WINDOWS). Copy the \"hooks\" block into your .claude/settings.json (project-level: <project>\\.claude\\settings.json, or user-level: %USERPROFILE%\\.claude\\settings.json). On Windows the interpreter is usually 'python' (not 'python3'). SUBSTITUTE the absolute path below with where MrFoX-MeM lives on your machine. Forward slashes work inside JSON strings on Windows, so 'C:/Users/you/...' is valid; backslashes would need to be escaped as '\\\\'. Set MRFOX_API and MRFOX_PROJECT in your env (see .env.example). Hooks fail open: if the core API is down they exit 0 silently and never block the session.",
+  "env": {
+    "MRFOX_API": "http://127.0.0.1:8077",
+    "MRFOX_PROJECT": "my-project"
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:/Users/you/MrFoX-MeM/hooks/session_start.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"C:/Users/you/MrFoX-MeM/hooks/user_prompt.py\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

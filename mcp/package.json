@@ -1,0 +1,24 @@
+{
+  "name": "mrfox-mem-mcp",
+  "version": "0.1.0",
+  "description": "MrFoX-MeM MCP server (stdio) — thin client over the local core HTTP API.",
+  "type": "module",
+  "bin": {
+    "mrfox-mem-mcp": "dist/server.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.18.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0"
+  }
+}

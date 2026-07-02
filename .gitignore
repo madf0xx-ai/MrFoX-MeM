@@ -1,0 +1,42 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node / MCP
+node_modules/
+mcp/dist/
+dist/
+
+# Local data store (SQLite + WAL) and logs
+data/*.db
+data/*.db-wal
+data/*.db-shm
+data/*.log
+
+# Local model / tokenizer caches (downloaded on first use, never committed)
+data/tiktoken_cache/
+data/model_cache/
+
+# Env / secrets
+.env
+.env.local
+
+# Test / coverage artifacts
+.coverage
+.coverage.*
+htmlcov/
+
+# Local agent config (machine-specific absolute paths; not portable)
+.claude/
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
