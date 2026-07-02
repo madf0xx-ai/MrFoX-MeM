@@ -34,10 +34,10 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: Install (core + dev/test deps)
+      - name: Install (core + dev/test deps; NOT the heavy fastembed extra — tests use the fallback)
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -e ".[dev]"
 
       - name: Run tests (with coverage)
         run: pytest --cov=core --cov-report=term-missing
