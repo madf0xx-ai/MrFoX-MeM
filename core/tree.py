@@ -103,6 +103,29 @@ def _cosine(a: list[float], b: list[float]) -> float:
     return dot / (na * nb)
 
 
+# Read-side cache: unpacked embedding rows per (store, project), invalidated by
+# Store.project_version(). Kills the per-query struct.unpack over every vector —
+# the dominant retrieval cost at scale — so repeat queries reuse the work.
+_CACHE_MAX_PROJECTS = 4
+_VEC_CACHE: dict[tuple[int, str], tuple[int, list]] = {}
+
+
+def _embedding_rows(store: Store, project: str) -> list:
+    key = (id(store), project)
+    gen = store.project_version(project)
+    ent = _VEC_CACHE.get(key)
+    if ent is not None and ent[0] == gen:
+        return ent[1]
+    rows = store.get_embeddings(project)
+    _VEC_CACHE[key] = (gen, rows)
+    if len(_VEC_CACHE) > _CACHE_MAX_PROJECTS:
+        for k in list(_VEC_CACHE):
+            if k != key:
+                del _VEC_CACHE[k]
+                break
+    return rows
+
+
 def _vector_scores_np(qvec: list[float], rows) -> dict[str, float]:
     """Vectorized cosine: stack candidate vectors into one (N, dim) matrix and do
     a single ``M @ q`` (NOT per-row numpy, which benchmarks *slower* than pure
@@ -130,7 +153,7 @@ def _vector_scores_np(qvec: list[float], rows) -> dict[str, float]:
 def _vector_scores(store: Store, project: str, query: str) -> dict[str, float]:
     embedder = embed_mod.get_embedder()
     qvec = embedder.embed([query])[0]
-    rows = store.get_embeddings(project)
+    rows = _embedding_rows(store, project)
     if not rows:
         return {}
     if _np is not None:

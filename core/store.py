@@ -162,6 +162,10 @@ class Store:
         # When True, per-write commits are suppressed so a bulk operation (e.g. a
         # whole ingest) commits ONCE at the end instead of thousands of times.
         self._defer_commit = False
+        # Monotonic per-project generation, bumped on every mutation. Read-side
+        # caches (vector matrix, graph adjacency) key on it to invalidate without
+        # polling the DB. In-memory is sufficient: one Store serves the process.
+        self._gen: dict[str, int] = {}
         self.fts_enabled = True
         self._conn = sqlite3.connect(self.db_path, check_same_thread=False)
         self._conn.row_factory = sqlite3.Row
@@ -198,6 +202,15 @@ class Store:
         # Index lives here (not in _SCHEMA) so it is only built once the column
         # is guaranteed — _SCHEMA executes before this on a legacy upgrade.
         cur.execute("CREATE INDEX IF NOT EXISTS idx_event_run ON event(run_id)")
+
+    def project_version(self, project: str) -> int:
+        """Generation counter for a project, bumped on any mutation. Read caches
+        rebuild only when this changes."""
+        return self._gen.get(project, 0)
+
+    def _bump(self, project: Optional[str]) -> None:
+        if project:
+            self._gen[project] = self._gen.get(project, 0) + 1
 
     def close(self) -> None:
         with self._lock:
@@ -289,6 +302,7 @@ class Store:
                 self._conn.execute(
                     "DELETE FROM fts_node WHERE project = ?", (pid,)
                 )
+            self._bump(pid)
             self._commit()
 
     def delete_project(self, pid: str) -> None:
@@ -344,6 +358,7 @@ class Store:
                     " VALUES (?,?,?,?,?)",
                     (node_id, project, label or "", summary or "", content or ""),
                 )
+            self._bump(project)
             self._commit()
 
     def get_nodes(self, project: str) -> list[sqlite3.Row]:
@@ -368,6 +383,7 @@ class Store:
                 " VALUES (?,?,?,?,?)",
                 (edge_id, project, src, dst, rel),
             )
+            self._bump(project)
             self._commit()
 
     def get_edges(self, project: str) -> list[sqlite3.Row]:

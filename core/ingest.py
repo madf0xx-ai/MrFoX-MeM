@@ -472,8 +472,16 @@ def ingest(
     into a single commit — the dominant ingest speed win — and makes re-ingest
     atomic: a failure part-way rolls back instead of leaving a half-built tree.
     """
+    # Phase 1: walk + insert nodes/edges under the write lock (fast SQLite).
     with store.bulk():
-        return _ingest_impl(store, path, project=project, exclude=exclude)
+        result, embed_batch, embedder = _ingest_impl(
+            store, path, project=project, exclude=exclude
+        )
+    # Phase 2: embed + persist vectors. The heavy ONNX inference runs lock-free
+    # between the two commits, so concurrent reads aren't stalled for the whole
+    # ingest (the write bursts inside still take the lock briefly).
+    _flush_embeddings(store, embedder, embed_batch, result)
+    return result
 
 
 def _ingest_impl(
@@ -722,24 +730,32 @@ def _ingest_impl(
                 store.insert_edge(re_id, project_name, file_id, target, "references")
                 result.edges += 1
 
-    # Compute + persist embeddings, reusing cached vectors for unchanged content
-    # (incremental re-index — the expensive embed step is skipped when a node's
-    # embed-text is unchanged since a prior ingest). Cache key includes backend +
-    # dim so a model change never reuses a stale vector.
-    if embed_batch:
-        texts = [t for _id, t in embed_batch]
-        dim = embedder.dim
-        prefix = f"{embedder.backend}:{dim}:"
-        keys = [hashlib.sha256((prefix + t).encode("utf-8")).hexdigest() for t in texts]
-        cache = store.get_cached_embeddings(keys)
-        miss = [i for i, k in enumerate(keys) if k not in cache]
-        if miss:
-            fresh = embedder.embed([texts[i] for i in miss])
-            for j, i in enumerate(miss):
-                cache[keys[i]] = fresh[j]
-                store.put_cached_embedding(keys[i], dim, fresh[j])
+    # Embeddings are computed + persisted by the caller (ingest) OUTSIDE the walk
+    # lock — see _flush_embeddings — so the slow ONNX inference doesn't block reads.
+    return result, embed_batch, embedder
+
+
+def _flush_embeddings(store: Store, embedder, embed_batch, result: "IngestResult") -> None:
+    """Compute + persist embeddings, reusing cached vectors for unchanged content
+    (incremental re-index — the embed step is skipped when a node's embed-text is
+    unchanged since a prior ingest). The ONNX inference runs OUTSIDE any write
+    lock (it is pure CPU); only the cache lookup and the row writes take the lock,
+    so a long ingest no longer blocks concurrent /relevant reads for its full
+    duration. Cache key includes backend + dim so a model change never reuses a
+    stale vector."""
+    if not embed_batch:
+        return
+    texts = [t for _id, t in embed_batch]
+    dim = embedder.dim
+    prefix = f"{embedder.backend}:{dim}:"
+    keys = [hashlib.sha256((prefix + t).encode("utf-8")).hexdigest() for t in texts]
+    cache = store.get_cached_embeddings(keys)                    # brief lock
+    miss = [i for i, k in enumerate(keys) if k not in cache]
+    fresh = embedder.embed([texts[i] for i in miss]) if miss else []  # NO lock — slow part
+    with store.bulk():                                           # short write burst
+        for j, i in enumerate(miss):
+            cache[keys[i]] = fresh[j]
+            store.put_cached_embedding(keys[i], dim, fresh[j])
         for (nid, _t), k in zip(embed_batch, keys):
             store.put_embedding(nid, dim, cache[k])
-        result.reused = len(texts) - len(miss)
-
-    return result
+    result.reused = len(texts) - len(miss)

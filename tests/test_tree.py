@@ -95,6 +95,25 @@ def test_relevant_signals_no_memory(tmp_path):
     s.close()
 
 
+def test_vector_cache_invalidates_on_reingest(tmp_path):
+    # The read-side embedding cache must NOT serve stale results after a mutation.
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "a.py").write_text('def alpha():\n    "alpha A"\n    return 1\n')
+    s = Store(str(tmp_path / "t.db"))
+    I.ingest(s, str(proj), project="demo")
+    T.hybrid_search(s, "demo", "beta", k=8)                 # warms the cache (no beta yet)
+    gen1 = s.project_version("demo")
+
+    (proj / "b.py").write_text('def beta_worker():\n    "beta B handler"\n    return 2\n')
+    I.ingest(s, str(proj), project="demo")                  # re-ingest -> version bumps
+    assert s.project_version("demo") != gen1
+
+    res = T.hybrid_search(s, "demo", "beta", k=8)
+    assert any("beta" in r["label"] for r in res)           # new node visible, not stale cache
+    s.close()
+
+
 def test_hybrid_search_empty_query_returns_empty(tmp_path):
     s = Store(str(tmp_path / "t.db"))
     assert T.hybrid_search(s, "demo", "   ") == []

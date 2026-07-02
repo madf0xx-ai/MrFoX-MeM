@@ -107,6 +107,30 @@ def personalized_pagerank(
     return {node_list[i]: r[i] for i in range(n)}
 
 
+# Cache the node/edge lists per (store, project), invalidated by the project
+# version — so PPR stops re-scanning the whole node+edge tables on every query.
+_GRAPH_CACHE_MAX = 4
+_GRAPH_CACHE: dict[tuple[int, str], tuple[int, list, list]] = {}
+
+
+def _graph_data(store: Any, project: str) -> tuple[list, list]:
+    key = (id(store), project)
+    gen = store.project_version(project) if hasattr(store, "project_version") else -1
+    ent = _GRAPH_CACHE.get(key)
+    if ent is not None and ent[0] == gen and gen != -1:
+        return ent[1], ent[2]
+    nodes = [row["id"] for row in store.get_nodes(project)]
+    edges = [(e["src"], e["dst"], e["rel"]) for e in store.get_edges(project)]
+    if gen != -1:
+        _GRAPH_CACHE[key] = (gen, nodes, edges)
+        if len(_GRAPH_CACHE) > _GRAPH_CACHE_MAX:
+            for k in list(_GRAPH_CACHE):
+                if k != key:
+                    del _GRAPH_CACHE[k]
+                    break
+    return nodes, edges
+
+
 def graph_scores(
     store: Any,
     project: str,
@@ -119,10 +143,9 @@ def graph_scores(
     with none, this is plain PageRank (global structural importance). Returns
     ``{node_id: score}``.
     """
-    nodes = [row["id"] for row in store.get_nodes(project)]
+    nodes, edges = _graph_data(store, project)
     if not nodes:
         return {}
-    edges = [(e["src"], e["dst"], e["rel"]) for e in store.get_edges(project)]
     personalization = None
     if seed_ids:
         personalization = {nid: 1.0 for nid in seed_ids if nid}
