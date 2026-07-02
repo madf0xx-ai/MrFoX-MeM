@@ -29,6 +29,10 @@ MAX_FILE_SIZE = 1_000_000  # 1 MB
 MAX_FILES = 5_000
 MAX_SUMMARY_CHARS = 600
 EMBED_TEXT_CHARS = 2_000
+# Chars of file BODY folded into the embedding text so the vector reflects
+# content, not just the path + summary (the embedding model truncates to its own
+# token limit anyway; this just stops the vector being name-only).
+EMBED_CONTENT_CHARS = 1_500
 
 # Reference-edge resolution guards. A bare identifier defined in many files (or a
 # ubiquitous short name) can't be resolved to a single definer by name alone —
@@ -364,12 +368,16 @@ def _denied_roots() -> list[str]:
     elif os.name == "nt":
         windir = os.environ.get("SystemRoot") or "C:\\Windows"
         roots.append(os.path.realpath(windir))
+        # Windows credential / DPAPI / vault stores (parity with the macOS
+        # Keychain + Linux /etc denials): Credentials, DPAPI master keys
+        # (Protect), Crypto keys, and the Credential Vault.
         for env_key in ("APPDATA", "LOCALAPPDATA"):
             base = os.environ.get(env_key)
             if base:
-                roots.append(
-                    os.path.realpath(os.path.join(base, "Microsoft", "Credentials"))
-                )
+                roots += [
+                    os.path.realpath(os.path.join(base, "Microsoft", n))
+                    for n in ("Credentials", "Protect", "Crypto", "Vault")
+                ]
     else:
         # Linux / other POSIX.
         roots += [
@@ -608,8 +616,9 @@ def _ingest_impl(
             store.insert_edge(eid, project_name, parent_id, file_id, "contains")
             result.edges += 1
             rel_path = os.path.relpath(full, root)
+            embed_body = "" if redacted else blob_text[:EMBED_CONTENT_CHARS]
             embed_batch.append(
-                (file_id, _embed_text(rel_path, f"{fkind}: {fname}", summary))
+                (file_id, _embed_text(rel_path, f"{fkind}: {fname}", summary, embed_body))
             )
 
             if redacted:

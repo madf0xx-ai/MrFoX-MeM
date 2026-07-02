@@ -58,6 +58,43 @@ def test_relevant_respects_tiny_budget(tmp_path):
     s.close()
 
 
+def test_relevant_surfaces_untagged_note_by_meaning(tmp_path):
+    # A free-text note with NO refs must still surface when the prompt matches it.
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "auth.py").write_text('def login(user):\n    "authenticate a user"\n    return True\n')
+    s = Store(str(tmp_path / "t.db"))
+    I.ingest(s, str(proj), project="demo")
+    s.insert_event("ev_note", "demo", "decision",
+                   "Auth uses JWT bearer tokens, not server sessions, for scale")
+
+    out = T.relevant(s, "demo", "how are JWT tokens used for auth", budget_tokens=700)
+    assert any("JWT" in e["content"] for e in out["events"])   # blended by meaning, no ref tag
+    s.close()
+
+
+def test_relevant_cites_repo_relative_paths(tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    (proj / "alpha.py").write_text('def alpha():\n    "alpha handles A"\n    return 1\n')
+    s = Store(str(tmp_path / "t.db"))
+    I.ingest(s, str(proj), project="demo")
+    out = T.relevant(s, "demo", "how does alpha work", budget_tokens=600)
+    assert "alpha.py" in out["context_md"]                  # citable repo-relative path
+    assert str(tmp_path) not in out["context_md"]           # no absolute-path leak
+    assert out["hit_count"] > 0
+    s.close()
+
+
+def test_relevant_signals_no_memory(tmp_path):
+    s = Store(str(tmp_path / "t.db"))
+    s.upsert_project("empty", "empty", "/tmp")              # project exists, no nodes
+    out = T.relevant(s, "empty", "anything at all", budget_tokens=300)
+    assert out["hit_count"] == 0
+    assert "NO RELEVANT PROJECT MEMORY FOUND" in out["context_md"]
+    s.close()
+
+
 def test_hybrid_search_empty_query_returns_empty(tmp_path):
     s = Store(str(tmp_path / "t.db"))
     assert T.hybrid_search(s, "demo", "   ") == []

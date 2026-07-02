@@ -87,6 +87,17 @@ def test_delete_project_purges_everything(tmp_path):
     s.close()
 
 
+def test_search_events_by_content(tmp_path):
+    s = _store(tmp_path)
+    s.upsert_project("p", "p", "/tmp")
+    s.insert_event("ev1", "p", "decision", "We chose JWT bearer tokens for authentication")
+    s.insert_event("ev2", "p", "note", "The deepfake pipeline lives in the scanner module")
+    hits = s.search_events("p", "authentication tokens", kinds=["decision", "note"], k=5)
+    assert any("JWT" in e["content"] for e in hits)          # found by meaning, no refs
+    assert all(isinstance(e["content"], str) for e in hits)
+    s.close()
+
+
 def test_bulk_is_atomic_and_rolls_back_on_error(tmp_path):
     s = _store(tmp_path)
     with s.bulk():

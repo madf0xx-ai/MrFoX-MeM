@@ -684,6 +684,47 @@ class Store:
         # bm25 rank: lower = better. Convert to a positive score.
         return [(r["node_id"], -float(r["rank"])) for r in rows]
 
+    def search_events(
+        self, project: str, query: str, kinds: Optional[list[str]] = None, k: int = 6
+    ) -> list[dict[str, Any]]:
+        """Lexically search event content (fts_event) so free-text notes/decisions
+        surface by MEANING — not only when manually ref-tagged to a hit node.
+        Returns event dicts in bm25-rank order."""
+        if not self.fts_enabled or not query.strip():
+            return []
+        match = _fts_query(query)
+        if not match:
+            return []
+        with self._lock:
+            try:
+                rows = self._conn.execute(
+                    "SELECT event_id FROM fts_event "
+                    "WHERE project = ? AND fts_event MATCH ? ORDER BY rank LIMIT ?",
+                    (project, match, int(max(k * 4, 12))),
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return []
+            ids = [r["event_id"] for r in rows]
+            if not ids:
+                return []
+            placeholders = ",".join("?" * len(ids))
+            erows = self._conn.execute(
+                f"SELECT * FROM event WHERE id IN ({placeholders})", ids
+            ).fetchall()
+        by_id = {r["id"]: r for r in erows}
+        out: list[dict[str, Any]] = []
+        for eid in ids:  # preserve bm25 rank order
+            r = by_id.get(eid)
+            if r is None:
+                continue
+            ev = self._event_to_dict(r)
+            if kinds and ev["kind"] not in kinds:
+                continue
+            out.append(ev)
+            if len(out) >= k:
+                break
+        return out
+
 
 def _fts_query(q: str) -> str:
     """Sanitize a user query into a safe FTS5 MATCH expression.

@@ -58,6 +58,26 @@ All notable changes to MrFoX-MeM are documented here. Format follows
 - **Honest docs:** "offline" reworded (one-time model download on first run), the
   test badge de-numbered, and the multi-language row marked opt-in.
 
+### Grounding · recall · interop · portability pass
+- **Anti-hallucination grounding:** injected context now cites **repo-relative
+  `path`s** (previously no provenance reached the agent, and absolute paths leaked
+  `/Users/…`), and the fence carries a grounding instruction (verify each path,
+  cite sources, don't invent, abstain if nothing relevant). Adds an explicit
+  **"NO RELEVANT MEMORY FOUND"** signal + `hit_count` so the agent knows when NOT
+  to rely on memory.
+- **Episodic memory is now searchable** (`store.search_events`) — free-text
+  notes/decisions surface by MEANING via FTS, not only when manually ref-tagged.
+- **File content is embedded** (bounded slice), not just path+summary — lifts
+  semantic recall of file bodies.
+- **Interop:** `integrations/rules/AGENTS.md` template (one file → Codex/Cursor/
+  Windsurf/Zed/Aider/Gemini/Copilot/goose/… ) + Cline `.clinerules`. The
+  `/mrfox-mem` command is now cross-OS (curl `--data-urlencode`, no python) with a
+  slug matching `ingest`.
+- **Windows** credential-denylist parity (DPAPI Protect/Crypto/Vault).
+- **Lightweight:** default `requirements.txt` no longer pulls fastembed/onnxruntime;
+  `pip install "mrfox-mem[fastembed]"` opts into semantic quality (auto-fallback +
+  `/health` degraded flag otherwise).
+
 ### vLLM-discipline pass (reverse-engineered vLLM's engineering standard, applied here)
 - **Retrieval-quality eval harness** (`scripts/eval.py` + labeled `eval/queries.json`)
   — hit@k / recall@k / MRR with per-stage ablation (RRF → +graph → +rerank).
