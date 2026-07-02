@@ -327,6 +327,17 @@ def _rel_path(path: str, root: str) -> str:
     return os.path.basename(path) or path
 
 
+def _node_line(n) -> Optional[int]:
+    """1-based definition line for a node row, or None (older rows / non-symbols)."""
+    if n is None:
+        return None
+    try:
+        val = n["line"]
+    except (IndexError, KeyError):
+        return None
+    return int(val) if val else None
+
+
 def _node_to_dict(n) -> dict[str, Any]:
     return {
         "id": n["id"],
@@ -335,6 +346,7 @@ def _node_to_dict(n) -> dict[str, Any]:
         "path": n["path"],
         "parent": n["parent"],
         "summary": n["summary"] or "",
+        "line": _node_line(n),
     }
 
 
@@ -418,9 +430,11 @@ def relevant(
         for h, chain_ids in ordered_hits:
             n = seen_nodes.get(h["node_id"])
             rel = _rel_path(n["path"], root) if (n and n["path"]) else "?"
+            line = _node_line(n)
+            cite = f"{rel}:{line}" if line else rel
             label = ((n["label"] if n else "") or "").strip()
             summary = (n["summary"] if n else "") or h["snippet"]
-            block = f"- `{rel}` — {label}: {summary}".strip()
+            block = f"- `{cite}` — {label}: {summary}".strip()
             if budget_ok(block):
                 lines.append(block)
             else:

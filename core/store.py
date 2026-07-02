@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS node (
     parent       TEXT,
     summary      TEXT,
     content_hash TEXT,
+    line         INTEGER,
     created      TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_node_project ON node(project);
@@ -199,6 +200,10 @@ class Store:
         if "run_id" not in event_cols:
             # Nullable so historical events (saved before runs existed) stay valid.
             cur.execute("ALTER TABLE event ADD COLUMN run_id TEXT")
+        node_cols = {r["name"] for r in cur.execute("PRAGMA table_info(node)").fetchall()}
+        if "line" not in node_cols:
+            # Nullable: 1-based definition line for symbols → file:line citations.
+            cur.execute("ALTER TABLE node ADD COLUMN line INTEGER")
         # Index lives here (not in _SCHEMA) so it is only built once the column
         # is guaranteed — _SCHEMA executes before this on a legacy upgrade.
         cur.execute("CREATE INDEX IF NOT EXISTS idx_event_run ON event(run_id)")
@@ -334,12 +339,13 @@ class Store:
         summary: str,
         content_hash: Optional[str],
         content: str = "",
+        line: Optional[int] = None,
     ) -> None:
         with self._lock:
             self._conn.execute(
                 "INSERT OR REPLACE INTO node"
-                "(id, project, kind, label, path, parent, summary, content_hash, created)"
-                " VALUES (?,?,?,?,?,?,?,?,?)",
+                "(id, project, kind, label, path, parent, summary, content_hash, line, created)"
+                " VALUES (?,?,?,?,?,?,?,?,?,?)",
                 (
                     node_id,
                     project,
@@ -349,6 +355,7 @@ class Store:
                     parent,
                     summary,
                     content_hash,
+                    line,
                     utcnow(),
                 ),
             )

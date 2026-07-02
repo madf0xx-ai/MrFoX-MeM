@@ -86,6 +86,18 @@ def test_relevant_cites_repo_relative_paths(tmp_path):
     s.close()
 
 
+def test_relevant_cites_line_numbers(tmp_path):
+    proj = tmp_path / "proj"
+    proj.mkdir()
+    # target_fn is defined on line 3 → citation should read m.py:3
+    (proj / "m.py").write_text('# header\n\ndef target_fn():\n    "does the target thing"\n    return 1\n')
+    s = Store(str(tmp_path / "t.db"))
+    I.ingest(s, str(proj), project="demo")
+    out = T.relevant(s, "demo", "target_fn does the target thing", budget_tokens=600)
+    assert "m.py:3" in out["context_md"]                    # file:line provenance
+    s.close()
+
+
 def test_relevant_signals_no_memory(tmp_path):
     s = Store(str(tmp_path / "t.db"))
     s.upsert_project("empty", "empty", "/tmp")              # project exists, no nodes

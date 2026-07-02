@@ -645,6 +645,7 @@ def _ingest_impl(
                         sid, project_name, "symbol",
                         f"{sym.name} ({sym.kind})", full, file_id,
                         _clip(sym.summary), None, f"{sym.name} {sym.summary}",
+                        line=sym.lineno,
                     )
                     result.nodes += 1
                     se = _new_id("edge")
@@ -667,11 +668,12 @@ def _ingest_impl(
                 # from the regex pass (tree-sitter path here extracts defs/refs).
                 extraction = treesit.extract(ext, text)
                 if extraction is not None:
-                    for name, kind, _line in extraction.defs:
+                    for name, kind, line in extraction.defs:
                         sid = _new_id("sym")
                         store.insert_node(
                             sid, project_name, "symbol",
                             f"{name} ({kind})", full, file_id, "", None, name,
+                            line=line,
                         )
                         result.nodes += 1
                         se = _new_id("edge")

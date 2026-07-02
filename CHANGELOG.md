@@ -58,6 +58,19 @@ All notable changes to MrFoX-MeM are documented here. Format follows
 - **Honest docs:** "offline" reworded (one-time model download on first run), the
   test badge de-numbered, and the multi-language row marked opt-in.
 
+### Performance & deeper grounding pass
+- **`file:line` citations:** symbol nodes now persist their 1-based definition
+  line (`node.line`, additive migration), and injected context cites
+  `path:line` (e.g. `core/graph.py:29`) so the agent jumps straight to the
+  definition to verify — the strongest anti-hallucination grounding.
+- **Version-keyed read cache:** `Store.project_version()` generation counter;
+  the vector matrix and graph node/edge lists are cached per project and rebuilt
+  only when it changes, so repeat `/relevant` queries skip re-scanning + re-
+  unpacking every vector (scales with node count).
+- **Ingest embeds outside the write lock** (two-phase): the slow ONNX inference
+  runs lock-free between commits, so a long ingest no longer stalls concurrent
+  reads for its full duration. Incremental vector reuse preserved.
+
 ### Grounding · recall · interop · portability pass
 - **Anti-hallucination grounding:** injected context now cites **repo-relative
   `path`s** (previously no provenance reached the agent, and absolute paths leaked
